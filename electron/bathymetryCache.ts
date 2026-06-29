@@ -1,4 +1,5 @@
 import * as https from 'https';
+import { fetchUrl } from './httpUtil';
 
 // Coarse global bathymetry grid (1-degree resolution from ETOPO1)
 // Fetched once, cached for the app lifetime
@@ -8,29 +9,6 @@ const GRID_LON_SIZE = 360 / GRID_RESOLUTION;  // 180
 
 let bathymetryGrid: Float32Array | null = null;
 let fetchPromise: Promise<void> | null = null;
-
-function fetchUrl(url: string, timeout = 30000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout, rejectUnauthorized: false } as any, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrl(res.headers.location!, timeout).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => resolve(data));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Timeout'));
-    });
-  });
-}
 
 export async function ensureBathymetryGrid(): Promise<void> {
   if (bathymetryGrid || fetchPromise) {

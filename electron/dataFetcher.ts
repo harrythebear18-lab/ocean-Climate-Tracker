@@ -1,32 +1,9 @@
 import * as https from 'https';
 import * as http from 'http';
 import { ClimateStation, ClimateMeasurement, DataSource, StationType } from '../src/types';
+import { fetchUrl } from './httpUtil';
 
 type FetchResult = { stations: ClimateStation[]; measurements: Map<string, ClimateMeasurement> };
-
-function fetchUrl(url: string, timeout = 30000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout, rejectUnauthorized: false } as any, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrl(res.headers.location, timeout).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-        return;
-      }
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => resolve(data));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`Timeout fetching ${url}`));
-    });
-  });
-}
 
 function safeNum(val: number | string | null | undefined): number | undefined {
   if (val === null || val === undefined || val === '') return undefined;
@@ -414,7 +391,7 @@ export class ErddapFetcher {
           }
 
           fetched = true;
-          console.log(`Argo ${dataset}: ${seenFloats.size} unique floats total`);
+          console.log(`Argo ${dataset}: ${seenFloats.size} unique floats`);
         } catch (e) {
           console.error(`Argo fetch attempt failed (${server.base}/${dataset}):`, e);
         }
