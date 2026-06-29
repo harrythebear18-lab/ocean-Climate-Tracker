@@ -7,7 +7,7 @@ A real-time planetary climate and ocean monitoring dashboard built with Electron
 ### Live Data Sources
 - **NOAA NDBC** — Ocean buoy stations (wave height, water temp, wind, pressure)
 - **Argo Floats** — Global ocean profiling floats (temperature/salinity at depth)
-- **ICOS Carbon Portal** — Ocean carbon flux stations
+- **PMEL CO2 Moorings** — Ocean carbon flux stations
 - **Aviation METAR** — Global airport weather observations
 - **NHC** — Active tropical cyclone tracks (free, no API key)
 - **Blitzortung.org** — Real-time lightning detection via WebSocket (free, no API key)
@@ -87,7 +87,7 @@ Without these, the app falls back to NHC (storms) and Blitzortung (lightning) �
 
 ## Tech Stack
 
-- **Electron** 31 — Cross-platform desktop runtime
+- **Electron** 42 — Cross-platform desktop runtime
 - **React** 18 — UI framework
 - **TypeScript** 5.5 — Type safety
 - **Vite** 5 — Build tooling & dev server
@@ -136,7 +136,7 @@ Without these, the app falls back to NHC (storms) and Blitzortung (lightning) �
 |--------|------|---------|--------------|
 | NOAA NDBC | Buoy observations | Public domain | No |
 | Argo | Ocean profiles | CC BY 4.0 | No |
-| ICOS Carbon Portal | Carbon flux | CC BY 4.0 | No |
+| PMEL CO2 Moorings | Carbon flux | Public domain | No |
 | AviationWeather.gov | METAR | Public domain | No |
 | NHC | Tropical cyclones | Public domain | No |
 | Blitzortung.org | Lightning | Non-commercial | No |

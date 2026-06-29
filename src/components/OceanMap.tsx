@@ -385,7 +385,8 @@ export default function OceanMap({
       const oxyStr = m?.oxygen !== undefined ? `O₂: ${m.oxygen.toFixed(1)} µmol/kg` : '';
       const nitStr = m?.nitrate !== undefined ? `NO₃: ${m.nitrate.toFixed(1)} µmol/kg` : '';
       const phStr = m?.ph !== undefined ? `pH: ${m.ph.toFixed(2)}` : '';
-      const noDataStr = (!tempStr && !airTempStr && !salinityStr && !waveStr && !curStr && !windStr && !presStr && !oxyStr && !nitStr && !phStr) ? 'No sensor data' : '';
+      const co2Str = m?.co2 !== undefined ? `CO₂: ${m.co2.toFixed(1)} ppm` : '';
+      const noDataStr = (!tempStr && !airTempStr && !salinityStr && !waveStr && !curStr && !windStr && !presStr && !oxyStr && !nitStr && !phStr && !co2Str) ? 'No sensor data' : '';
       const scoreStr = health ? `Integrity: ${health.integrityScore.toFixed(0)}/100` : 'Integrity: N/A';
       const driftStr = health?.driftDetected ? 'DRIFT DETECTED' : '';
       const invStr = station.invalidated ? `INVALIDATED: ${station.invalidationReason ?? 'flagged by watchdog'}` : '';
@@ -408,6 +409,7 @@ export default function OceanMap({
           ${oxyStr ? `<div style="color: #22d3ee;">${oxyStr}</div>` : ''}
           ${nitStr ? `<div style="color: #22d3ee;">${nitStr}</div>` : ''}
           ${phStr ? `<div style="color: #22d3ee;">${phStr}</div>` : ''}
+          ${co2Str ? `<div style="color: #ec4899;">${co2Str}</div>` : ''}
           ${noDataStr ? `<div style="color: #dc2626;">${noDataStr}</div>` : ''}
           ${station.country ? `<div style="color: #5a6478;">${station.country}</div>` : ''}
         </div>`,

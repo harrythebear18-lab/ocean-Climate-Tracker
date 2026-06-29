@@ -325,26 +325,18 @@ export class ErddapFetcher {
     const measurements = new Map<string, ClimateMeasurement>();
 
     const ARGO_SERVERS = [
-      { base: 'https://erddap.aoml.noaa.gov/hdb/erddap/tabledap', datasets: [
-        'argo_float_pacific_2025_present',
-        'argo_float_atlantic_2025_present',
-        'argo_float_indian_2025_present',
-      ], vars: 'PLATFORM_NUMBER,latitude,longitude,time,PRES,TEMP,PSAL', platformField: 'PLATFORM_NUMBER', presField: 'PRES', tempField: 'TEMP', psalField: 'PSAL', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
+      // Primary: Ifremer ArgoFloats — confirmed working, global coverage
+      { base: 'https://erddap.ifremer.fr/erddap/tabledap', datasets: [
+        'ArgoFloats',
+      ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
+      // BGC: Ifremer synthetic BGC dataset
       { base: 'https://erddap.ifremer.fr/erddap/tabledap', datasets: [
         'ArgoFloats-synthetic-BGC',
       ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: 'doxy', nitrateField: 'nitrate', phField: 'ph_in_situ_total', chlaField: 'chla' },
+      // BGC: PolarWatch
       { base: 'https://polarwatch.noaa.gov/erddap/tabledap', datasets: [
         'Argo_BGC_NRT',
       ], vars: 'WMO_ID,latitude,longitude,time,pressure,temperature,salinity', platformField: 'WMO_ID', presField: 'pressure', tempField: 'temperature', psalField: 'salinity', doxyField: 'oxygen', nitrateField: 'nitrate', phField: 'pH_insitu', chlaField: 'chl_a' },
-      { base: 'https://coastwatch.pfeg.noaa.gov/erddap/tabledap', datasets: [
-        'erdArgoAll',
-      ], vars: 'trajectory,longitude,latitude,time,depth,temperature,salinity', platformField: 'trajectory', presField: 'depth', tempField: 'temperature', psalField: 'salinity', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
-      { base: 'https://data-argo.ifremer.fr/erddap/tabledap', datasets: [
-        'ArgoFloats',
-      ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
-      { base: 'https://erddap.copernicus.eu/erddap/tabledap', datasets: [
-        'argo_float_profile',
-      ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
     ];
 
     let fetched = false;
@@ -358,8 +350,8 @@ export class ErddapFetcher {
 
       for (const dataset of server.datasets) {
         try {
-          const url = `${server.base}/${dataset}.json?${server.vars}&time%3Emax(time)-11days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
-          const data = await fetchErddapJson(url, 30000);
+          const url = `${server.base}/${dataset}.json?${server.vars}&time%3Emax(time)-30days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
+          const data = await fetchErddapJson(url, 45000);
           const cols = data.table.columnNames;
           const get = buildRowMapper(cols);
 
@@ -415,8 +407,8 @@ export class ErddapFetcher {
         try {
           const bgcFields = [(server as any).doxyField, (server as any).nitrateField, (server as any).phField, (server as any).chlaField].filter((f: string) => f);
           const allVars = `${server.vars},${bgcFields.join(',')}`;
-          const url = `${server.base}/${dataset}.json?${allVars}&time%3Emax(time)-11days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
-          const data = await fetchErddapJson(url, 45000);
+          const url = `${server.base}/${dataset}.json?${allVars}&time%3Emax(time)-30days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
+          const data = await fetchErddapJson(url, 60000);
           const cols = data.table.columnNames;
           const get = buildRowMapper(cols);
 
