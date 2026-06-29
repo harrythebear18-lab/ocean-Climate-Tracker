@@ -164,6 +164,9 @@ export class HeuristicWatchdog {
       const m = measurements.get(station.id);
       if (!m || m.waterTemp === undefined) continue;
 
+      // Skip sparse reference sources from cluster outlier checks
+      if (station.source === 'PMEL_CO2' || station.source === 'ARGO' || station.source === 'BGC_ARGO') continue;
+
       const neighbors: { temp: number; dist: number }[] = [];
       for (const other of stations) {
         if (other.id === station.id) continue;

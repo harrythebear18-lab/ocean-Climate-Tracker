@@ -308,11 +308,13 @@ export class ClimateMonitor {
     for (const ver of crossVerifications) {
       const station = stations.find((s) => s.id === ver.stationId);
       const isArgo = station?.source === 'ARGO' || station?.source === 'BGC_ARGO';
+      const isCO2 = station?.source === 'PMEL_CO2';
 
-      // Argo floats are the fidelity reference — don't invalidate them
+      // Argo floats and CO2 moorings are reference/sparse sources — don't invalidate them
+      // CO2 moorings report infrequently (months) and shouldn't be flagged as stuck
       // Also only invalidate on critical severity, not mere warnings
       const invalidatingFlags = ver.flags.filter(
-        (f) => !isArgo && INVALIDATING_FLAG_TYPES.has(f.type) && f.severity === 'critical'
+        (f) => !isArgo && !isCO2 && INVALIDATING_FLAG_TYPES.has(f.type) && f.severity === 'critical'
       );
 
       if (invalidatingFlags.length > 0) {

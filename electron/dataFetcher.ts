@@ -492,7 +492,7 @@ export class ErddapFetcher {
     try {
       const CO2_BASE = 'https://data.pmel.noaa.gov/pmel/erddap/tabledap';
       const vars = 'station_id,longitude,latitude,time,SST,SSS,pCO2_sw,pCO2_air,xCO2_air,pH_sw';
-      const url = `${CO2_BASE}/all_pmel_co2_moorings.json?${vars}&time%3Emax(time)-365days&orderBy(%22station_id,time%22)`;
+      const url = `${CO2_BASE}/all_pmel_co2_moorings.json?${vars}&time%3Emax(time)-730days&orderBy(%22station_id,time%22)`;
       const data = await fetchErddapJson(url, 30000);
       const cols = data.table.columnNames;
       const get = buildRowMapper(cols);
@@ -524,7 +524,7 @@ export class ErddapFetcher {
           lat,
           lon,
           lastUpdate: ts,
-          active: ts > Date.now() - 90 * 24 * 60 * 60 * 1000, // active if reported in last 90 days
+          active: ts > Date.now() - 365 * 24 * 60 * 60 * 1000, // active if reported in last 365 days
         });
 
         const m: ClimateMeasurement = {
@@ -540,6 +540,7 @@ export class ErddapFetcher {
       console.error('ERDDAP CO2 mooring fetch error:', e);
     }
 
+    console.log(`CO2 moorings: ${stations.length} stations (${stations.filter(s => s.active).length} active)`);
     return { stations, measurements };
   }
 }
