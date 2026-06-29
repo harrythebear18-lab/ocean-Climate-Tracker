@@ -1,25 +1,15 @@
 import { Vessel } from '../src/types';
+import { fetchUrl } from './httpUtil';
 
 const AXIOM_API = 'https://www.axiomoverwatch.io/api/v1/positions/latest';
 
 export class VesselFetcher {
   static async fetchVessels(): Promise<Vessel[]> {
     const url = `${AXIOM_API}?west=-180&south=-90&east=180&north=90`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'Accept': 'application/json' },
-      });
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        throw new Error(`Axiom API returned ${res.status}`);
-      }
-
-      const data = await res.json() as {
+      const raw = await fetchUrl(url, 30000);
+      const data = JSON.parse(raw) as {
         type: string;
         features: Array<{
           type: string;
@@ -62,7 +52,6 @@ export class VesselFetcher {
       console.log(`Vessels fetched: ${vessels.length} from Axiom Overwatch`);
       return vessels;
     } catch (e) {
-      clearTimeout(timeout);
       console.error(`Vessel fetch failed:`, e);
       return [];
     }

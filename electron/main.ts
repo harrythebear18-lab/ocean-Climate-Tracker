@@ -1,3 +1,4 @@
+import './httpUtil'; // Must be first — sets global DNS servers
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';

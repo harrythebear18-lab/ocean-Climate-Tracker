@@ -2,45 +2,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { WebSocket } from 'ws';
 import { ClimateStation, ClimateMeasurement, Storm, StormTrackPoint, LightningStrike, DataSource } from '../src/types';
-
-function fetchUrl(url: string, timeout = 30000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const isHttps = url.startsWith('https');
-    const mod = isHttps ? https : http;
-    const options: https.RequestOptions = {
-      timeout,
-      headers: {
-        'Accept': 'application/geo+json',
-        'User-Agent': 'ClimateTracker/1.0 (climate monitoring application)',
-      },
-      rejectUnauthorized: false,
-    };
-    const req = mod.get(url, options, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        let location = res.headers.location;
-        // Resolve relative redirects
-        if (location.startsWith('/')) {
-          const parsed = new URL(url);
-          location = `${parsed.protocol}//${parsed.host}${location}`;
-        }
-        fetchUrl(location, timeout).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-        return;
-      }
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => resolve(data));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`Timeout fetching ${url}`));
-    });
-  });
-}
+import { fetchUrl } from './httpUtil';
 
 function safeNum(val: any): number | undefined {
   if (val === null || val === undefined || val === '') return undefined;
@@ -161,8 +123,9 @@ export class StormFetcher {
     if (METEOMATICS_USERNAME && METEOMATICS_PASSWORD) {
       sources.push(this.fetchMeteomaticsStorms());
     }
-    // NHC is always included as a free source
+    // NHC + NWS alerts are always included as free sources
     sources.push(this.fetchNHCStorms());
+    sources.push(this.fetchNWSAlertStorms());
 
     const results = await Promise.allSettled(sources);
     let allStorms: Storm[] = [];
@@ -176,6 +139,7 @@ export class StormFetcher {
     if (XWEATHER_CLIENT_ID) srcNames.push('XWeather');
     if (METEOMATICS_USERNAME) srcNames.push('Meteomatics');
     srcNames.push('NHC');
+    srcNames.push('NWS-Alerts');
     console.log(`Storms fetched: ${allStorms.length} active (sources: ${srcNames.join(', ')})`);
 
     return allStorms;
@@ -313,25 +277,28 @@ export class StormFetcher {
       const data = JSON.parse(raw);
       const activeStorms = data.activeStorms || data.ActiveStorms || [];
       for (const s of activeStorms) {
-        const lat = safeNum(s.lat);
-        const lon = safeNum(s.lon);
+        // NHC JSON uses latitude_numeric/longitude_numeric, not lat/lon
+        const lat = safeNum(s.latitude_numeric) ?? safeNum(s.lat);
+        const lon = safeNum(s.longitude_numeric) ?? safeNum(s.lon);
         if (lat === undefined || lon === undefined) continue;
 
-        const ts = new Date(s.lastUpdate).getTime();
+        const ts = s.lastUpdate ? new Date(s.lastUpdate).getTime() : Date.now();
+        const intensityNum = safeNum(s.intensity);
+        const pressureNum = safeNum(s.pressure);
         storms.push({
           id: `nhc_${s.id}`,
           name: s.name || 'Unknown',
-          basin: s.basin || '',
-          type: s.type || 'tropical_cyclone',
+          basin: s.binNumber?.startsWith('EP') ? 'East Pacific' : s.binNumber?.startsWith('AT') ? 'Atlantic' : '',
+          type: 'tropical_cyclone',
           classification: s.classification || '',
-          intensity: s.intensity || '',
+          intensity: intensityNum !== undefined ? `${intensityNum} kt` : '',
           lat, lon,
-          windSpeedKt: safeNum(s.windSpeedKt),
-          pressureMB: safeNum(s.pressureMB),
-          movementDir: s.movementDir,
+          windSpeedKt: intensityNum,
+          pressureMB: pressureNum,
+          movementDir: safeNum(s.movementDir) !== undefined ? String(s.movementDir) : undefined,
           movementSpeedKt: safeNum(s.movementSpeed),
           lastUpdate: ts,
-          track: [{ lat, lon, timestamp: ts, windSpeedKt: safeNum(s.windSpeedKt), pressureMB: safeNum(s.pressureMB) }],
+          track: [{ lat, lon, timestamp: ts, windSpeedKt: intensityNum, pressureMB: pressureNum }],
           forecastTrack: [],
         });
       }
@@ -353,6 +320,57 @@ export class StormFetcher {
       if (!isDup) result.push(s);
     }
     return result;
+  }
+
+  private static async fetchNWSAlertStorms(): Promise<Storm[]> {
+    const storms: Storm[] = [];
+    try {
+      const raw = await fetchUrl(
+        'https://api.weather.gov/alerts/active?event=Hurricane%20Warning,Hurricane%20Watch,Tropical%20Storm%20Warning,Tropical%20Storm%20Watch,Severe%20Thunderstorm%20Warning,Tornado%20Warning,Tornado%20Watch',
+        20000
+      );
+      const data = JSON.parse(raw);
+      const features = data.features || [];
+
+      for (const f of features) {
+        const props = f.properties || {};
+        const geom = f.geometry;
+        if (!geom || !geom.coordinates) continue;
+
+        // Get centroid of polygon
+        let lat: number | undefined, lon: number | undefined;
+        const coords = geom.coordinates;
+        if (geom.type === 'Polygon' && Array.isArray(coords[0])) {
+          const ring = coords[0];
+          lon = ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length;
+          lat = ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length;
+        } else if (geom.type === 'Point' && typeof coords[0] === 'number') {
+          lon = coords[0]; lat = coords[1];
+        }
+        if (lat === undefined || lon === undefined) continue;
+
+        const event = props.event || 'Severe Weather';
+        const severity = props.severity || 'Minor';
+        const ts = props.sent ? new Date(props.sent).getTime() : Date.now();
+
+        storms.push({
+          id: `nws_${props.id || Math.random().toString(36).slice(2)}`,
+          name: event,
+          basin: '',
+          type: event.includes('Tornado') ? 'tornado' : event.includes('Tropical') || event.includes('Hurricane') ? 'tropical_cyclone' : 'thunderstorm',
+          classification: severity,
+          intensity: severity,
+          lat, lon,
+          lastUpdate: ts,
+          track: [{ lat, lon, timestamp: ts }],
+          forecastTrack: [],
+        });
+      }
+      console.log(`NWS alert storms: ${storms.length}`);
+    } catch (e) {
+      console.error('NWS alert storm fetch failed:', (e as Error).message);
+    }
+    return storms;
   }
 }
 
@@ -399,6 +417,8 @@ export class LightningFetcher {
     // Blitzortung is always included as a free source
     if (!this.connected) this.connectBlitzortung();
     sources.push(this.getBlitzortungStrikes());
+    // Also try REST fallback for Blitzortung data
+    sources.push(this.fetchBlitzortungRest());
 
     const results = await Promise.allSettled(sources);
     let allStrikes: LightningStrike[] = [];
@@ -416,7 +436,7 @@ export class LightningFetcher {
     if (XWEATHER_CLIENT_ID) srcNames.push('XWeather');
     if (METEOMATICS_USERNAME) srcNames.push('Meteomatics');
     srcNames.push('Blitzortung');
-    console.log(`Lightning fetched: ${allStrikes.length} strikes (sources: ${srcNames.join(', ')})`);
+    if (allStrikes.length > 0) console.log(`Lightning fetched: ${allStrikes.length} strikes (sources: ${srcNames.join(', ')})`);
 
     return allStrikes;
   }
@@ -499,6 +519,9 @@ export class LightningFetcher {
     if (this.connected && this.ws) return;
     const servers = [
       'wss://ws1.blitzortung.org:3000/',
+      'wss://ws2.blitzortung.org:3000/',
+      'wss://ws3.blitzortung.org:3000/',
+      'wss://ws4.blitzortung.org:3000/',
       'wss://ws5.blitzortung.org:3000/',
       'wss://ws6.blitzortung.org:3000/',
       'wss://ws7.blitzortung.org:3000/',
@@ -551,6 +574,34 @@ export class LightningFetcher {
     } catch (e) {
       console.error('Blitzortung WebSocket connect failed:', e);
     }
+  }
+
+  private static async fetchBlitzortungRest(): Promise<LightningStrike[]> {
+    const strikes: LightningStrike[] = [];
+    try {
+      // Blitzortung public data — last strikes via their public map data endpoint
+      const now = Date.now();
+      const raw = await fetchUrl('https://data.blitzortung.org/Data/Protected/last_strikes.php?number=500', 15000);
+      const lines = raw.trim().split('\n');
+      for (const line of lines) {
+        try {
+          const s = JSON.parse(line);
+          const lat = safeNum(s.lat);
+          const lon = safeNum(s.lon);
+          if (lat === undefined || lon === undefined) continue;
+          const ts = typeof s.time === 'number' ? Math.floor(s.time / 1e6) : now;
+          strikes.push({
+            id: `blitz_rest_${ts}_${lat.toFixed(3)}_${lon.toFixed(3)}`,
+            lat, lon, timestamp: ts,
+            polarity: s.pol > 0 ? 'positive' : 'negative',
+          });
+        } catch { /* skip unparseable lines */ }
+      }
+      console.log(`Blitzortung REST: ${strikes.length}`);
+    } catch (e) {
+      // This endpoint may require auth — silently skip
+    }
+    return strikes;
   }
 
   private static dedupStrikes(strikes: LightningStrike[]): LightningStrike[] {
