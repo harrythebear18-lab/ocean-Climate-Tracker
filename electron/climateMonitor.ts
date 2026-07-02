@@ -23,6 +23,7 @@ const SOURCE_EXPECTED_INTERVAL_MS: Record<DataSource, number> = {
 };
 
 const STALE_THRESHOLD_MS = 3 * 60 * 60 * 1000;
+const INVALIDATION_RESET_MS = 2 * 60 * 60 * 1000; // Reset invalidation after 2 hours to force re-verification
 
 export class ClimateMonitor {
   private stations: ClimateStation[] = [];
@@ -353,8 +354,8 @@ export class ClimateMonitor {
       // when their data simply hasn't updated yet but the invalidation was spurious
       const station = stations.find((s) => s.id === stationId);
       if (station) {
-        const expectedInterval = SOURCE_EXPECTED_INTERVAL_MS[station.source] ?? STALE_THRESHOLD_MS;
-        if (Date.now() - info.since > expectedInterval) {
+        // Use fixed 2-hour window for all stations to force periodic re-verification
+        if (Date.now() - info.since > INVALIDATION_RESET_MS) {
           toReset.push(stationId);
         }
       }

@@ -324,8 +324,15 @@ export class ErddapFetcher {
     const stations: ClimateStation[] = [];
     const measurements = new Map<string, ClimateMeasurement>();
 
+    // Use AOML regional datasets for better coverage (~8k floats)
     const ARGO_SERVERS = [
-      // Primary: Ifremer ArgoFloats — confirmed working, global coverage
+      // Primary: AOML regional datasets
+      { base: 'https://erddap.aoml.noaa.gov/hdb/erddap/tabledap', datasets: [
+        'argo_float_pacific_2025_present',
+        'argo_float_atlantic_2025_present',
+        'argo_float_indian_2025_present',
+      ], vars: 'PLATFORM_NUMBER,latitude,longitude,time,PRES,TEMP,PSAL', platformField: 'PLATFORM_NUMBER', presField: 'PRES', tempField: 'TEMP', psalField: 'PSAL', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
+      // Fallback: Ifremer ArgoFloats
       { base: 'https://erddap.ifremer.fr/erddap/tabledap', datasets: [
         'ArgoFloats',
       ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
