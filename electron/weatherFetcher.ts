@@ -275,11 +275,15 @@ export class StormFetcher {
 
     try {
       const data = JSON.parse(raw);
+      console.log(`NHC raw data keys:`, Object.keys(data));
       const activeStorms = data.activeStorms || data.ActiveStorms || [];
+      console.log(`NHC activeStorms count: ${activeStorms.length}`);
       for (const s of activeStorms) {
-        // NHC JSON uses latitude_numeric/longitude_numeric, not lat/lon
-        const lat = safeNum(s.latitude_numeric) ?? safeNum(s.lat);
-        const lon = safeNum(s.longitude_numeric) ?? safeNum(s.lon);
+        console.log(`NHC storm object keys:`, Object.keys(s));
+        console.log(`NHC storm sample:`, JSON.stringify(s).substring(0, 200));
+        // NHC JSON uses latitudeNumeric/longitudeNumeric (camelCase), not latitude_numeric
+        const lat = safeNum(s.latitudeNumeric) ?? safeNum(s.latitude_numeric) ?? safeNum(s.lat);
+        const lon = safeNum(s.longitudeNumeric) ?? safeNum(s.longitude_numeric) ?? safeNum(s.lon);
         if (lat === undefined || lon === undefined) continue;
 
         const ts = s.lastUpdate ? new Date(s.lastUpdate).getTime() : Date.now();

@@ -50,9 +50,11 @@ export class ErddapFetcher {
     try {
       const vars = 'station,longitude,latitude,time,wd,wspd,gst,wvht,dpd,apd,bar,atmp,wtmp,dewp,vis,ptdy,tide,wspu,wspv';
       const url = `${ERDDAP_BASE}/cwwcNDBCMet.json?${vars}&time%3E=now-2hours&orderBy(%22station,time%22)`;
+      console.log(`NDBC fetching: ${url}`);
       const data = await fetchErddapJson(url, 30000);
       const cols = data.table.columnNames;
       const get = buildRowMapper(cols);
+      console.log(`NDBC columns:`, cols);
 
       const seenStations = new Set<string>();
 
@@ -94,6 +96,7 @@ export class ErddapFetcher {
         };
         measurements.set(id, m);
       }
+      console.log(`NDBC: ${stations.length} stations, ${measurements.size} measurements`);
     } catch (e) {
       console.error('ERDDAP NDBC fetch error:', e);
     }
@@ -324,7 +327,7 @@ export class ErddapFetcher {
     const stations: ClimateStation[] = [];
     const measurements = new Map<string, ClimateMeasurement>();
 
-    // Use AOML regional datasets for better coverage (~8k floats)
+    // Use AOML regional datasets for better coverage (~4k floats deduped)
     const ARGO_SERVERS = [
       // Primary: AOML regional datasets
       { base: 'https://erddap.aoml.noaa.gov/hdb/erddap/tabledap', datasets: [
@@ -336,18 +339,11 @@ export class ErddapFetcher {
       { base: 'https://erddap.ifremer.fr/erddap/tabledap', datasets: [
         'ArgoFloats',
       ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: '', nitrateField: '', phField: '', chlaField: '' },
-      // BGC: Ifremer synthetic BGC dataset
-      { base: 'https://erddap.ifremer.fr/erddap/tabledap', datasets: [
-        'ArgoFloats-synthetic-BGC',
-      ], vars: 'platform_number,latitude,longitude,time,pres,temp,psal', platformField: 'platform_number', presField: 'pres', tempField: 'temp', psalField: 'psal', doxyField: 'doxy', nitrateField: 'nitrate', phField: 'ph_in_situ_total', chlaField: 'chla' },
-      // BGC: PolarWatch
-      { base: 'https://polarwatch.noaa.gov/erddap/tabledap', datasets: [
-        'Argo_BGC_NRT',
-      ], vars: 'WMO_ID,latitude,longitude,time,pressure,temperature,salinity', platformField: 'WMO_ID', presField: 'pressure', tempField: 'temperature', psalField: 'salinity', doxyField: 'oxygen', nitrateField: 'nitrate', phField: 'pH_insitu', chlaField: 'chl_a' },
     ];
 
     let fetched = false;
     const seenFloats = new Set<string>();
+    const datasetCounts = new Map<string, number>(); // Track per-dataset new counts
 
     // Phase 1: Core Argo servers (fast, 30s timeout)
     for (const server of ARGO_SERVERS) {
@@ -362,7 +358,11 @@ export class ErddapFetcher {
           const cols = data.table.columnNames;
           const get = buildRowMapper(cols);
 
+          const beforeCount = seenFloats.size;
+          let rowCount = 0;
+
           for (const row of data.table.rows) {
+            rowCount++;
             const floatId = get(row, server.platformField) as string;
             if (!floatId) continue;
 
@@ -398,7 +398,9 @@ export class ErddapFetcher {
           }
 
           fetched = true;
-          console.log(`Argo ${dataset}: ${seenFloats.size} unique floats`);
+          const newCount = seenFloats.size - beforeCount;
+          datasetCounts.set(dataset, newCount);
+          console.log(`Argo ${dataset}: +${newCount} new (deduped total: ${stations.length})`);
         } catch (e) {
           console.error(`Argo fetch attempt failed (${server.base}/${dataset}):`, e);
         }
@@ -414,7 +416,7 @@ export class ErddapFetcher {
         try {
           const bgcFields = [(server as any).doxyField, (server as any).nitrateField, (server as any).phField, (server as any).chlaField].filter((f: string) => f);
           const allVars = `${server.vars},${bgcFields.join(',')}`;
-          const url = `${server.base}/${dataset}.json?${allVars}&time%3Emax(time)-30days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
+          const url = `${server.base}/${dataset}.json?${allVars}&time%3Emax(time)-90days&${server.presField}%3C=20&orderBy(%22${server.platformField},time%22)`;
           const data = await fetchErddapJson(url, 60000);
           const cols = data.table.columnNames;
           const get = buildRowMapper(cols);
